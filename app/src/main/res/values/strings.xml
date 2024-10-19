@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Tracker App</string>
+    <string name="start_update_data">Start Update Data</string>
+    <string name="stop">Stop</string>
+    <string name="enable_gps">Location services are required for some functionalities of Tapp It mobile app. Please enable location services in your device settings to proceed.</string>
+    <string name="alert">Alert</string>
+
+
+
+</resources>
