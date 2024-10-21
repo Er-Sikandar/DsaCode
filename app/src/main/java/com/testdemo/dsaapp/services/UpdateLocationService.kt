@@ -10,6 +10,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
@@ -141,10 +143,12 @@ class UpdateLocationService : Service() {
         Log.e(TAG, "New location: " + location.longitude + " " + location.latitude + " time: "+Prefs.getInstance().getPrefsInt(Const.LOCATION_TIME))
         Toast.makeText(this, "Service Started: ${location.latitude} : ${location.longitude}", Toast.LENGTH_SHORT).show()
         mLocation = location
-        val uploadWorkRequest = OneTimeWorkRequest.Builder(FileUploadWorker::class.java)
-            .setInputData(workDataOf(Const.WORKER_DATA to "${location.longitude} : ${location.longitude}"))
-            .build()
-        WorkManager.getInstance(this).enqueue(uploadWorkRequest)
+        if (isInternetConnected(applicationContext)) {
+            val uploadWorkRequest = OneTimeWorkRequest.Builder(FileUploadWorker::class.java)
+                .setInputData(workDataOf(Const.WORKER_DATA to "${location.longitude} : ${location.longitude}"))
+                .build()
+            WorkManager.getInstance(this).enqueue(uploadWorkRequest)
+        }
         /**
          * Here Bind LocalBroadcast for ui data show
          */
@@ -209,6 +213,17 @@ class UpdateLocationService : Service() {
         } catch (unlikely: SecurityException) {
             Prefs.getInstance().setPrefsBoolean(Const.REQ_LOCATION, true)
             Log.e(TAG, "Lost location permission. Could not remove updates. $unlikely")
+        }
+    }
+    private  fun isInternetConnected(context: Context): Boolean {
+        return try {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val networkCapabilities = connectivityManager.activeNetwork ?: return false
+            val activeNetwork = connectivityManager.getNetworkCapabilities(networkCapabilities) ?: return false
+
+            return activeNetwork.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } catch (e: Exception) {
+            return false
         }
     }
 }

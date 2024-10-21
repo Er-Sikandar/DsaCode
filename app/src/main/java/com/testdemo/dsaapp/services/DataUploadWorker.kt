@@ -26,12 +26,12 @@ class FileUploadWorker(val appContext: Context, workerParams: WorkerParameters) 
         try {
           //  applicationContext.sendNotification("File Upload in Progress", "File upload in Progress.")
 
-            var isConnected = isInternetConnected(appContext)
+            /*var isConnected = isInternetConnected(appContext)
 
             while (!isConnected) {
                 delay(5000)
                 isConnected = isInternetConnected(appContext)
-            }
+            }*/
 
             // Retrieve the file path from input data
             val data = inputData.getString(Const.WORKER_DATA)
@@ -39,13 +39,13 @@ class FileUploadWorker(val appContext: Context, workerParams: WorkerParameters) 
                 Toast.makeText(applicationContext, "Worker: ${data}", Toast.LENGTH_SHORT).show()
             }
 
-            if (!data.isNullOrBlank()) {
+           /* if (!data.isNullOrBlank()) {
                 applicationContext.sendNotification("File Upload Success", "File upload success.")
                 return@withContext Result.success()
             }else{
                 applicationContext.sendNotification("File Upload Failed", "File upload failed empty.")
                 return@withContext Result.failure()
-            }
+            }*/
             //Todo api here
             /*val okHttpClient = OkHttpClient.Builder()
                 .connectTimeout(300, TimeUnit.SECONDS)
@@ -80,6 +80,7 @@ class FileUploadWorker(val appContext: Context, workerParams: WorkerParameters) 
             }
              return@withContext Result.failure()
             */
+            return@withContext Result.failure()
         } catch (e: Exception) {
             Log.e("CallRec", "Exception => $e")
             return@withContext Result.failure()

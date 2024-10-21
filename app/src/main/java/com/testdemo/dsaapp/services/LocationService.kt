@@ -9,11 +9,14 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.provider.ContactsContract.Directory.PACKAGE_NAME
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -32,13 +35,15 @@ import com.testdemo.dsaapp.services.UpdateLocationService.Companion.EXTRA_STARTE
 import com.testdemo.dsaapp.services.UpdateLocationService.Companion.mLocation
 import com.testdemo.dsaapp.utils.Const
 import com.testdemo.dsaapp.utils.Prefs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class LocationService : Service() {
 
     companion object {
         val TAG: String = UpdateLocationService::class.java.simpleName
-        const val ACTION_START_LOCATION_UPDATES = "com.testdemo.dsaapp.action.START_LOCATION_UPDATES"
-        const val ACTION_STOP_LOCATION_UPDATES = "com.testdemo.dsaapp.action.STOP_LOCATION_UPDATES"
+        const val ACTION_START_LOCATION_UPDATES = PACKAGE_NAME+".action.START_LOCATION_UPDATES"
+        const val ACTION_STOP_LOCATION_UPDATES = PACKAGE_NAME+".action.STOP_LOCATION_UPDATES"
         const val CHANNEL_ID = "channel_01"
         const val NOTIFICATION_ID = 12345678
         var mFusedLocationClient: FusedLocationProviderClient? = null
@@ -74,9 +79,11 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
+        Log.e(TAG,"onStartCommand >>>>")
         when (intent.action) {
             ACTION_START_LOCATION_UPDATES -> requestLocationUpdates()
             ACTION_STOP_LOCATION_UPDATES -> removeLocationUpdates()
+
         }
         return START_NOT_STICKY
     }
@@ -100,16 +107,29 @@ class LocationService : Service() {
 
     private fun onNewLocation(location: Location) {
         Log.e(TAG, "New location: ${location.latitude}, ${location.longitude}")
-        Toast.makeText(this, "Service Started: ${location.latitude} : ${location.longitude}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "NewLocation: ${location.latitude} : ${location.longitude}", Toast.LENGTH_SHORT).show()
         mLocation = location
-        val uploadWorkRequest = OneTimeWorkRequest.Builder(FileUploadWorker::class.java)
-            .setInputData(workDataOf(Const.WORKER_DATA to "${location.longitude} : ${location.longitude}"))
-            .build()
-        WorkManager.getInstance(this).enqueue(uploadWorkRequest)
+        if (isInternetConnected(applicationContext)) {
+            val uploadWorkRequest = OneTimeWorkRequest.Builder(FileUploadWorker::class.java)
+                .setInputData(workDataOf(Const.WORKER_DATA to "${location.longitude} : ${location.longitude}"))
+                .build()
+            WorkManager.getInstance(this).enqueue(uploadWorkRequest)
+        }
         if (serviceIsRunningInForeground()) {
             Log.e(TAG, "New notify: ")
             mNotificationManager!!.notify(UpdateLocationService.NOTIFICATION_ID, getNotification())
         }
+    }
+    private  fun isInternetConnected(context: Context): Boolean {
+        return try {
+                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val networkCapabilities = connectivityManager.activeNetwork ?: return false
+                val activeNetwork = connectivityManager.getNetworkCapabilities(networkCapabilities) ?: return false
+
+                return activeNetwork.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } catch (e: Exception) {
+                return false
+            }
     }
     private fun serviceIsRunningInForeground(): Boolean {
         val activityManager = this.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -118,19 +138,21 @@ class LocationService : Service() {
         }
     }
     private fun getNotification(): Notification {
-        val intent = Intent(this, UpdateLocationService::class.java)
-        val servicePendingIntent = PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val stopIntent = Intent(this, LocationService::class.java).apply {
+            action = ACTION_STOP_LOCATION_UPDATES
+        }
+        val stopPendingIntent = PendingIntent.getService(this, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val activityPendingIntent = PendingIntent.getActivity(this, 0, Intent(this, TrackerActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val builder: NotificationCompat.Builder = NotificationCompat.Builder(this)
             .addAction(R.drawable.ic_launcher_background, "Open App", activityPendingIntent)
-            .addAction(R.drawable.ic_back, "Remove Data", servicePendingIntent)
+            .addAction(R.drawable.ic_back, "Remove Data", stopPendingIntent)
             .setContentTitle("Working in background!!")
             .setOngoing(true)
             .setPriority(Notification.DEFAULT_ALL)
             .setSmallIcon(R.drawable.ic_back)
             .setWhen(System.currentTimeMillis())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            builder.setChannelId(UpdateLocationService.CHANNEL_ID)
+            builder.setChannelId(CHANNEL_ID)
         }
         return builder.build()
     }
@@ -147,9 +169,15 @@ class LocationService : Service() {
 
     fun removeLocationUpdates() {
         try {
-            mFusedLocationClient?.removeLocationUpdates(mLocationCallback!!)
-            stopForeground(true)
-            stopSelf()
+            if (mFusedLocationClient != null && mLocationCallback != null) {
+                Log.d(TAG, "Removing location updates")
+                mFusedLocationClient?.removeLocationUpdates(mLocationCallback!!)
+                stopForeground(true)
+                stopSelf()
+                Log.e(TAG, "Location updates removed, service stopped")
+            } else {
+                Log.e(TAG, "Failed to remove location updates: FusedLocationClient or LocationCallback is null")
+            }
         } catch (e: SecurityException) {
             Log.e(TAG, "Location permission lost: ${e.message}")
         }

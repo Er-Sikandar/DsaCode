@@ -1,33 +1,21 @@
 package com.testdemo.dsaapp
 
 import android.Manifest
-import android.content.BroadcastReceiver
-import android.content.ComponentName
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.location.Geocoder
-import android.location.Location
 import android.os.Build
 import android.os.Bundle
-import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.testdemo.dsaapp.databinding.ActivityTrackerBinding
 import com.testdemo.dsaapp.services.LocationService
 import com.testdemo.dsaapp.services.UpdateLocationService
-import com.testdemo.dsaapp.services.UpdateLocationService.LocalBinder
 import com.testdemo.dsaapp.utils.Const
 import com.testdemo.dsaapp.utils.GpsFetch
 import com.testdemo.dsaapp.utils.Prefs
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 
 class TrackerActivity : BaseActivity() {
@@ -90,6 +78,16 @@ class TrackerActivity : BaseActivity() {
            })
        }
         binding.btnStop.setOnClickListener {
+            if (serviceIsRunningInForeground(LocationService::class.java)) {
+                val stopIntent = Intent(this, LocationService::class.java).apply {
+                    action = LocationService.ACTION_STOP_LOCATION_UPDATES
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(stopIntent)
+                } else {
+                    startService(stopIntent)
+                }
+            }
             /*if (mBound) {
                 mService!!.removeLocationUpdates()
                 unbindService(mServiceConnection)
@@ -97,9 +95,13 @@ class TrackerActivity : BaseActivity() {
             }*/
         }
     }
-
+    private fun serviceIsRunningInForeground(javaC: Class<LocationService>): Boolean {
+        val activityManager = this.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        return activityManager.getRunningServices(Int.MAX_VALUE).any {
+            javaC.name == it.service.className
+        }
+    }
     private fun startLocService() {
-        getLog(TAG,"DD")
         val serviceIntent = Intent(this, LocationService::class.java).apply {
             action = LocationService.ACTION_START_LOCATION_UPDATES
         }
