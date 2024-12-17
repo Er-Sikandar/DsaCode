@@ -53,6 +53,8 @@ dependencies {
     //worker
     implementation(libs.androidx.work.runtime)
 
+    implementation(libs.androidx.fetch.runtime)
+
 
     
 }
